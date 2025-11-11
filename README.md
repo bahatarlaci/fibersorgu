@@ -138,7 +138,3 @@ docker-compose down
 ## 📝 Lisans
 
 MIT
-
----
-
-Made with ❤️ for TPC Infrastructure
