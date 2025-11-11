@@ -5,8 +5,12 @@ const url = require('url');
 // Telegram Bot Ayarları (environment variables'dan okunacak)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const FLAT_ID = process.env.FLAT_ID || '19293439';
+let FLAT_ID = process.env.FLAT_ID || '19293439'; // Varsayılan
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL) || 3600000; // 1 saat (ms)
+
+// Aktif sorgulamalar için Map
+const activeChecks = new Map();
+let lastUpdateId = 0;
 
 // Doğrulama
 if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN === 'your_bot_token_here') {
@@ -21,10 +25,6 @@ if (!TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID === 'your_chat_id_here') {
 
 // HTML yanıtını JSON'a dönüştüren fonksiyon
 function parseHtmlToJson(html) {
-    // Debug için HTML'i logla
-    console.log('📄 HTML uzunluğu:', html.length);
-    console.log('📄 HTML önizleme:', html.substring(0, 200));
-    
     const result = {
         internetBaglantiSilgileri: {},
         genelBilgiler: {}
@@ -156,8 +156,143 @@ function sendTelegramMessage(message) {
     });
 }
 
+// Telegram mesajlarını al (polling)
+function getUpdates(offset = 0) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.telegram.org',
+            path: `/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${offset}&timeout=30`,
+            method: 'GET'
+        };
+        
+        https.get(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(data));
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
+// Komutları işle
+async function handleCommand(message) {
+    const text = message.text;
+    const chatId = message.chat.id;
+    
+    if (chatId.toString() !== TELEGRAM_CHAT_ID.toString()) {
+        return; // Sadece kayıtlı chat ID'den komut kabul et
+    }
+    
+    // /start komutu
+    if (text === '/start') {
+        await sendTelegramMessage(
+            `👋 *Fiber Altyapı Sorgulama Botu*\n\n` +
+            `Komutlar:\n` +
+            `• /start - Bu mesajı göster\n` +
+            `• /check <bbk_kodu> - Tek seferlik sorgulama\n` +
+            `• /watch <bbk_kodu> - Otomatik saat başı sorgulama başlat\n` +
+            `• /stop - Otomatik sorgulamayı durdur\n` +
+            `• /status - Mevcut durumu göster\n\n` +
+            `Örnek: /check 19293439`
+        );
+    }
+    
+    // /check <bbk_kodu> - Tek seferlik sorgulama
+    else if (text.startsWith('/check ')) {
+        const flatId = text.split(' ')[1];
+        if (!flatId || !/^\d+$/.test(flatId)) {
+            await sendTelegramMessage('❌ Geçersiz BBK kodu! Sadece rakam kullanın.\nÖrnek: /check 19293439');
+            return;
+        }
+        await sendTelegramMessage(`🔍 BBK Kodu ${flatId} sorgulanıyor...`);
+        await checkAndNotify(flatId);
+    }
+    
+    // /watch <bbk_kodu> - Otomatik sorgulama başlat
+    else if (text.startsWith('/watch ')) {
+        const flatId = text.split(' ')[1];
+        if (!flatId || !/^\d+$/.test(flatId)) {
+            await sendTelegramMessage('❌ Geçersiz BBK kodu! Sadece rakam kullanın.\nÖrnek: /watch 19293439');
+            return;
+        }
+        
+        // Eski sorgulamayı durdur
+        if (activeChecks.has('default')) {
+            clearInterval(activeChecks.get('default'));
+        }
+        
+        FLAT_ID = flatId;
+        await sendTelegramMessage(
+            `✅ Otomatik sorgulama başlatıldı!\n\n` +
+            `📊 BBK Kodu: ${flatId}\n` +
+            `⏰ Aralık: ${CHECK_INTERVAL / 60000} dakika\n\n` +
+            `İlk sorgulama yapılıyor...`
+        );
+        
+        // İlk sorgulamayı yap
+        await checkAndNotify(flatId);
+        
+        // Periyodik sorgulama başlat
+        const intervalId = setInterval(() => checkAndNotify(flatId), CHECK_INTERVAL);
+        activeChecks.set('default', intervalId);
+    }
+    
+    // /stop - Otomatik sorgulamayı durdur
+    else if (text === '/stop') {
+        if (activeChecks.has('default')) {
+            clearInterval(activeChecks.get('default'));
+            activeChecks.delete('default');
+            await sendTelegramMessage('⏸️ Otomatik sorgulama durduruldu.');
+        } else {
+            await sendTelegramMessage('⚠️ Zaten çalışan bir sorgulama yok.');
+        }
+    }
+    
+    // /status - Durum kontrolü
+    else if (text === '/status') {
+        const isActive = activeChecks.has('default');
+        await sendTelegramMessage(
+            `📊 *Bot Durumu*\n\n` +
+            `Durum: ${isActive ? '✅ Aktif' : '⏸️ Pasif'}\n` +
+            `BBK Kodu: ${FLAT_ID}\n` +
+            `Aralık: ${CHECK_INTERVAL / 60000} dakika\n` +
+            `Chat ID: ${TELEGRAM_CHAT_ID}`
+        );
+    }
+}
+
+// Mesajları sürekli dinle
+async function pollMessages() {
+    console.log('👂 Mesajlar dinleniyor...');
+    
+    while (true) {
+        try {
+            const response = await getUpdates(lastUpdateId + 1);
+            
+            if (response.ok && response.result.length > 0) {
+                for (const update of response.result) {
+                    lastUpdateId = update.update_id;
+                    
+                    if (update.message && update.message.text) {
+                        console.log(`📥 Komut alındı: ${update.message.text}`);
+                        await handleCommand(update.message);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Polling hatası:', error.message);
+            await new Promise(resolve => setTimeout(resolve, 5000)); // 5 saniye bekle
+        }
+    }
+}
+
 // Sonuçları formatla ve Telegram'a gönder
-async function checkAndNotify() {
+async function checkAndNotify(flatId = FLAT_ID) {
     const now = new Date().toLocaleString('tr-TR', { 
         timeZone: 'Europe/Istanbul',
         year: 'numeric',
@@ -206,26 +341,32 @@ ${result.internetBaglantiSilgileri.bosPort === 'VAR' ? '✅ Boş port mevcut!' :
     }
 }
 
-// İlk çalıştırmayı yap
+// Bot başlat
 console.log('🚀 Telegram Bot başlatıldı');
-console.log(`📊 Flat ID: ${FLAT_ID}`);
+console.log(`� Chat ID: ${TELEGRAM_CHAT_ID}`);
 console.log(`⏰ Kontrol aralığı: ${CHECK_INTERVAL / 60000} dakika`);
-console.log(`📱 Chat ID: ${TELEGRAM_CHAT_ID}`);
+console.log('� Komutlar için /start gönderin');
 console.log('---');
 
-// Hemen bir sorgulama yap
-checkAndNotify();
+// Hoş geldin mesajı gönder
+sendTelegramMessage(
+    `🤖 *Bot başlatıldı!*\n\n` +
+    `Komutlar için /start gönderin.\n` +
+    `Hızlı başlangıç: /watch ${FLAT_ID}`
+).catch(e => console.error('Başlangıç mesajı gönderilemedi:', e.message));
 
-// Her saat başı sorgulama yap
-setInterval(checkAndNotify, CHECK_INTERVAL);
+// Mesaj dinlemeyi başlat
+pollMessages();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM alındı, kapatılıyor...');
+    activeChecks.forEach(intervalId => clearInterval(intervalId));
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     console.log('SIGINT alındı, kapatılıyor...');
+    activeChecks.forEach(intervalId => clearInterval(intervalId));
     process.exit(0);
 });
