@@ -21,31 +21,44 @@ if (!TELEGRAM_CHAT_ID || TELEGRAM_CHAT_ID === 'your_chat_id_here') {
 
 // HTML yanıtını JSON'a dönüştüren fonksiyon
 function parseHtmlToJson(html) {
+    // Debug için HTML'i logla
+    console.log('📄 HTML uzunluğu:', html.length);
+    console.log('📄 HTML önizleme:', html.substring(0, 200));
+    
     const result = {
         internetBaglantiSilgileri: {},
         genelBilgiler: {}
     };
     
-    const bosPortMatch = html.match(/<td>Boş Port<\/td>\s*<td>(.*?)<\/td>/);
+    // Boş Port
+    const bosPortMatch = html.match(/<td>Boş Port<\/td>\s*<td>(.*?)<\/td>/i);
     if (bosPortMatch) result.internetBaglantiSilgileri.bosPort = bosPortMatch[1];
     
-    const portHizMatch = html.match(/<td>Port Max Hızı<\/td>\s*<td>(.*?)<\/td>/);
+    // Port Max Hızı
+    const portHizMatch = html.match(/<td>Port Max Hızı<\/td>\s*<td>(.*?)<\/td>/i);
     if (portHizMatch) result.internetBaglantiSilgileri.portMaxHizi = portHizMatch[1];
     
-    const bbkMatch = html.match(/<td>BBK Kodu<\/td>\s*<td[^>]*>(.*?)<\/td>/);
+    // BBK Kodu
+    const bbkMatch = html.match(/<td>BBK Kodu<\/td>\s*<td[^>]*>(.*?)<\/td>/i);
     if (bbkMatch) result.genelBilgiler.bbkKodu = bbkMatch[1];
     
-    const mudurlukMatch = html.match(/<td>Müdürlük Adı<\/td><td>(.*?)<\/td>/);
+    // Müdürlük Adı
+    const mudurlukMatch = html.match(/<td>Müdürlük Adı<\/td><td>(.*?)<\/td>/i);
     if (mudurlukMatch) result.genelBilgiler.mudurlukAdi = mudurlukMatch[1];
     
-    const santralMatch = html.match(/<td>Santral Adı<\/td><td>(.*?)<\/td>/);
+    // Santral Adı
+    const santralMatch = html.match(/<td>Santral Adı<\/td><td>(.*?)<\/td>/i);
     if (santralMatch) result.genelBilgiler.santralAdi = santralMatch[1];
     
-    const fttxMatch = html.match(/<td>FTTX Türü<\/td><td>(.*?)<\/td>/);
+    // FTTX Türü
+    const fttxMatch = html.match(/<td>FTTX Türü<\/td><td>(.*?)<\/td>/i);
     if (fttxMatch) result.genelBilgiler.fttxTuru = fttxMatch[1];
     
-    const isEmriMatch = html.match(/<td>İş Emri<\/td><td>(.*?)<\/td>/);
+    // İş Emri
+    const isEmriMatch = html.match(/<td>İş Emri<\/td><td>(.*?)<\/td>/i);
     if (isEmriMatch) result.genelBilgiler.isEmri = isEmriMatch[1];
+    
+    console.log('✅ Parse sonucu:', JSON.stringify(result, null, 2));
     
     return result;
 }
