@@ -13,6 +13,9 @@ RUN npm install --production
 # Uygulama dosyalarını kopyala
 COPY . .
 
+# start.sh'i executable yap
+RUN chmod +x start.sh
+
 # Port'u expose et
 EXPOSE 3000
 
@@ -21,4 +24,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Uygulamayı başlat
-CMD ["npm", "start"]
+CMD ["sh", "start.sh"]

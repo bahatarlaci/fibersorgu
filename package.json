@@ -4,8 +4,9 @@
   "description": "TPC Fiber Altyapı Sorgulama Uygulaması",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "sh start.sh",
+    "dev": "node server.js",
+    "bot": "node telegram-bot.js"
   },
   "keywords": [
     "fiber",
