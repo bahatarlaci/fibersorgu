@@ -316,10 +316,8 @@
             disableButton();
 
             try {
-                // API base URL'i (production'da değiştirilmeli)
-                const API_BASE = window.location.port === '3000' 
-                    ? '' 
-                    : 'http://localhost:3000';
+                // API base URL'i - sunucuda ve local'de çalışır
+                const API_BASE = window.location.origin;
                 const response = await fetch(`${API_BASE}/api/check/${flatId}`);
                 const result = await response.json();
 
