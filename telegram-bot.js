@@ -145,7 +145,15 @@ function sendTelegramMessage(message) {
 
 // Sonuçları formatla ve Telegram'a gönder
 async function checkAndNotify() {
-    const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+    const now = new Date().toLocaleString('tr-TR', { 
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
     console.log(`[${now}] Fiber sorgulama başlatıldı...`);
     
     try {
